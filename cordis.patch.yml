@@ -1,0 +1,7 @@
+# dsh-hindsight-manager bundle layer — applied automatically when a profile
+# lists this package in dsh.profile.bundles (via the dsh.bundle.patch
+# declaration). Mounts on the host plane next to the hindsight plugin itself,
+# where the webServer service reaches it.
+- insert:
+    - id: hindsight-manager
+      name: 'dsh-hindsight-manager'
