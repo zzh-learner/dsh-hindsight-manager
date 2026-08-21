@@ -523,20 +523,20 @@ interface StoreShare {
 }
 
 /** Sidebar footer action: toggles the manager panel (rail-aware). */
-function FooterButton(props: { collapsed: boolean } & StoreShare & { t: Translate }) {
+function FooterButton(props: { wide: boolean } & StoreShare & { t: Translate }) {
   const open = props.useStore((s) => s.open)
   return (
     <button
       type="button"
       className="dshm-footBtn"
-      data-rail={props.collapsed ? 'true' : undefined}
+      data-rail={props.wide ? undefined : 'true'}
       data-active={open || undefined}
       aria-label={props.t('footer.label')}
       title={props.t('footer.label')}
       onClick={() => { props.actions.toggle() }}
     >
-      <BrainIcon size={props.collapsed ? 18 : 16} />
-      {!props.collapsed && <span>{props.t('footer.label')}</span>}
+      <BrainIcon size={props.wide ? 16 : 18} />
+      {props.wide && <span>{props.t('footer.label')}</span>}
     </button>
   )
 }
