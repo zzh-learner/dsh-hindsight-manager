@@ -1,6 +1,6 @@
 {
   "name": "dsh-hindsight-manager",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "DSH Web UI panel for the Hindsight coding-agent memory plugin: view config/status of every Hindsight layer and start/stop the local daemon.",
   "license": "MIT",
   "type": "module",
@@ -37,6 +37,15 @@
       "inject": [
         "@deepseek-ai/dsh-client-runtime"
       ]
+    }
+  },
+  "peerDependencies": {
+    "react": "^18.2.0",
+    "dsh-better-sidebar": "^0.12.0"
+  },
+  "peerDependenciesMeta": {
+    "dsh-better-sidebar": {
+      "optional": true
     }
   },
   "devDependencies": {

@@ -10,6 +10,7 @@ declare module '@deepseek-ai/dsh-client-runtime/client' {
     effect(fn: () => () => void, label?: string): () => void
     slots: import('./client-shapes').SlotRegistryFace
     locale: import('./client-shapes').LocaleFace
+    betterSidebar: import('dsh-better-sidebar').BetterSidebarService
   }
   export interface StoreHandle<T, A> {
     useStore<S>(selector: (state: T) => S): S
@@ -68,4 +69,38 @@ declare module '@deepseek-ai/dsh-client-ui-layout/client' {
 
 declare module '@deepseek-ai/dsh-client-ui-sidebar/client' {
   // Type-only seat: declares the sidebar.footer.action slot name used at runtime.
+}
+
+declare module 'dsh-better-sidebar' {
+  import type { ReactNode } from 'react'
+  /** Session the tab targets (minimal face of the shipped type). */
+  export interface SessionScope { sessionId: string; cwd?: string }
+  /** One open sidebar tab (minimal face). */
+  export interface SidebarTab { id: string; type: string; title?: string }
+  /** Live sidebar state (minimal face; badge receives it). */
+  export interface SidebarState { tabs: unknown[] }
+  /** Props every tab component receives (fields this plugin uses). */
+  export interface TabComponentProps {
+    ctx: Record<string, unknown>
+    scope: SessionScope
+    tab: SidebarTab
+    visible: boolean
+  }
+  /** One registered tab kind (fields this plugin declares). */
+  export interface TabDescriptor {
+    id: string
+    title: string | (() => string)
+    icon?: ReactNode | ((size: number) => ReactNode)
+    order?: number
+    single?: boolean
+    badge?: (ctx: unknown, scope: SessionScope, state: SidebarState) => string | number | null | undefined
+    onOpen?: (tab: SidebarTab, scope: SessionScope) => void
+    onClose?: (tab: SidebarTab, scope: SessionScope) => void
+    component: (props: TabComponentProps) => ReactNode
+  }
+  /** The registry service published as ctx.betterSidebar (minimal face). */
+  export interface BetterSidebarService {
+    registerTab(descriptor: TabDescriptor): () => void
+    readonly features: readonly string[]
+  }
 }
