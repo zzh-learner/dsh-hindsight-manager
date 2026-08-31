@@ -1,12 +1,13 @@
 # dsh-hindsight-manager
 
-DSH Web 插件：为 @vectorize-io/hindsight-coding-agents（即 🧠 Hindsight 记忆插件）提供一个侧栏管理面板——查看它的全部配置项与运行状态，并能启动 / 停止本地 daemon。
+DSH Web 插件：为 @vectorize-io/hindsight-coding-agents（即 🧠 Hindsight 记忆插件）提供一个 better-sidebar 侧边卡片 tab——查看它的全部配置项与运行状态，并能启动 / 停止本地 daemon。前置依赖：dsh-better-sidebar v0.12+（未安装时本插件 client 半不激活，host 半路由不受影响）。
 
 ## 功能
 
-**状态**（侧栏底部「Hindsight」按钮 → 右侧停靠面板）
+**状态**（侧栏 + 菜单「Hindsight」tab；tab 角标 ●/○ 同步 daemon 运行状态）
 
-- daemon 运行状态徽章（运行中 / 已停止 / 启动中），5 秒自动轮询
+- daemon 运行状态徽章（运行中 / 已停止 / 启动中），5 秒自动轮询（tab 不可见时暂停）
+- tab 标题角标：● 运行中 / ○ 已停止（缓存自 onOpen/onClose 生命周期管理的 10s 后台轮询）
 - API 地址、profile、端口、API 版本（/health + /version 实时探测）
 - 数据库路径（~/.pg0/instances/…）、插件日志 / daemon 日志路径、启动器位置
 - **启动 / 停止 daemon** 按钮
@@ -42,7 +43,7 @@ npx @deepseek-ai/dsh plugin --profile web add C:/Users/johnl/Documents/dsh-hinds
 npx @deepseek-ai/dsh plugin --profile web remove dsh-hindsight-manager
 ```
 
-安装后重启 dsh web GUI，侧栏底部会出现 🧠「Hindsight」按钮。
+安装后重启 dsh web GUI，侧栏 + 菜单会出现 🧠「Hindsight」tab，设置页「侧边卡片」分区出现本插件卡片（含独立开关）。
 
 ## 开发
 
@@ -62,8 +63,8 @@ $env:DSHM_E2E_DAEMON = "1"; node --test test/daemon.test.mjs
 | --- | --- |
 | src/hindsight.ts | 纯逻辑：配置读取/分层/脱敏、daemon 健康探测、启动/停止、bank API、日志尾部 |
 | src/index.ts | node 半：在 ctx.webServer 注册 /dsh-hindsight-manager/api/* JSON 路由 |
-| src/client.tsx | client 半：侧栏 footer 按钮（sidebar.footer.action 槽）+ 右侧停靠面板（shell.overlay 槽） |
-| types/ | cordis / dsh-client-runtime / slots 的最小 ambient 类型声明（本机无 harness 源码树） |
+| src/client.tsx | client 半：注册 better-sidebar tab（ctx.betterSidebar.registerTab）+ tab 组件（4 子页）与 badge 状态缓存 |
+| types/ | cordis / dsh-client-runtime / dsh-better-sidebar 的最小 ambient 类型声明（本机无 harness 源码树） |
 
 ### API 一览（node 半）
 
