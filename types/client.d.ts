@@ -14,7 +14,8 @@ declare module '@deepseek-ai/dsh-client-runtime/client' {
   }
   export interface StoreHandle<T, A> {
     useStore<S>(selector: (state: T) => S): S
-    actions: A
+    /** The runtime binds each mutator's draft (client.js: actions[key] = (...params) => store.update(d => mutate(d, ...params))); exposed actions drop it. */
+    actions: { [K in keyof A]: A[K] extends (draft: T, ...args: infer P) => void ? (...args: P) => void : never }
   }
   export interface ActionsDecl<T> {
     [key: string]: (draft: T, ...args: never[]) => void

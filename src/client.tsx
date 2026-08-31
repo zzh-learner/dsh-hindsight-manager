@@ -1,22 +1,19 @@
 /**
- * dsh-hindsight-manager browser half: a footer action in the sidebar plus a
- * right-docked panel in the shell overlay. The panel talks to this plugin's
- * node half over same-origin JSON (/dsh-hindsight-manager/api/*): daemon
- * status polling, layered config view, per-bank memory overview with
- * knowledge pages, log tails, and daemon start/stop actions.
+ * dsh-hindsight-manager browser half: a dsh-better-sidebar side-card tab.
+ * Registers one sidebar tab (id hindsight-manager:main) through
+ * ctx.betterSidebar.registerTab; the tab talks to this plugin's node half
+ * over same-origin JSON (/dsh-hindsight-manager/api/*): daemon status
+ * polling, layered config view, per-bank memory overview with knowledge
+ * pages, log tails, and daemon start/stop actions. The tab badge mirrors
+ * daemon health from a module-level cache fed by a lifecycle-scoped
+ * background poller.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import { defineStore } from '@deepseek-ai/dsh-client-runtime/client'
-// Type-only: slot-name merges this plugin relies on (declared by ui-sidebar /
-// ui-layout; mirrored in this repo's types/ stubs).
-import type {} from '@deepseek-ai/dsh-client-ui-slots'
-import type {} from '@deepseek-ai/dsh-client-locale/client'
-import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
-import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
-
-/** Locale namespace owned by this plugin. */
-const NS = 'dsh-hindsight-manager'
+import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+// Type-only: dsh-better-sidebar service faces (ctx.betterSidebar). Never
+// value-import this package — the client build purity gate rejects it.
+import type { TabComponentProps } from 'dsh-better-sidebar'
 
 /** Same-origin API prefix served by this plugin's node half. */
 const API = '/dsh-hindsight-manager/api'
@@ -66,7 +63,6 @@ interface LogsPayload { plugin: LogTail; daemon: LogTail }
 // ---------------------------------------------------------------------------
 
 const zh = {
-  'footer.label': 'Hindsight',
   'panel.title': 'Hindsight 记忆管理',
   'tab.status': '状态',
   'tab.config': '配置',
@@ -113,14 +109,12 @@ const zh = {
   'logs.daemon': 'daemon 日志（profiles/<profile>.log）',
   'logs.missing': '文件不存在',
   'logs.refresh': '刷新日志',
-  'common.close': '关闭',
   'common.retry': '重试',
   'common.loading': '加载中…',
   'common.never': '从未',
 } as const
 
 const en: Record<keyof typeof zh, string> = {
-  'footer.label': 'Hindsight',
   'panel.title': 'Hindsight memory manager',
   'tab.status': 'Status',
   'tab.config': 'Config',
@@ -167,19 +161,23 @@ const en: Record<keyof typeof zh, string> = {
   'logs.daemon': 'Daemon log (profiles/<profile>.log)',
   'logs.missing': 'File not found',
   'logs.refresh': 'Refresh logs',
-  'common.close': 'Close',
   'common.retry': 'Retry',
   'common.loading': 'Loading…',
   'common.never': 'never',
 }
 
 type Key = keyof typeof zh
-type Translate = (key: Key) => string
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
-  interface LocaleNamespaceMap {
-    [NS]: Key
-  }
+/** Resolve UI language without the host locale service (node/test safe). */
+function isZh(): boolean {
+  if (typeof document !== 'undefined' && document.documentElement.lang === 'zh') return true
+  const nav = typeof navigator !== 'undefined' ? navigator.language : 'en'
+  return nav.toLowerCase().startsWith('zh')
+}
+
+/** Translate a key with the self-resolved dictionary. */
+function tr(key: Key): string {
+  return (isZh() ? zh : en)[key]
 }
 
 // ---------------------------------------------------------------------------
@@ -220,15 +218,6 @@ const GROUP_LABELS_EN: Record<string, string> = {
 // ---------------------------------------------------------------------------
 
 const CSS = [
-  '.dshm-footBtn{flex:none;display:flex;align-items:center;gap:8px;width:calc(100% + 4px);height:42px;margin:4px -2px;padding:0 10px 0 8px;box-sizing:border-box;border:none;border-radius:12px;background:transparent;cursor:pointer;overflow:hidden;color:var(--dsw-alias-label-primary);font-family:inherit;font-size:14px;line-height:22px}',
-  '.dshm-footBtn:hover{background:var(--dsw-alias-interactive-bg-hover)}',
-  '.dshm-footBtn[data-active=true]{background:var(--dsw-alias-interactive-bg-active)}',
-  '.dshm-footBtn[data-rail=true]{width:36px;height:36px;margin:8px 0 10px;justify-content:center;gap:0;padding:0;border-radius:50%}',
-  '.dshm-win{position:fixed;top:0;right:0;bottom:0;z-index:1100;display:flex;flex-direction:column;background:var(--dsw-alias-bg-layer-2);border-left:1px solid var(--dsw-alias-border-l2);box-shadow:-8px 0 32px rgba(0,0,0,.25);pointer-events:auto}',
-  '.dshm-head{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);flex:none}',
-  '.dshm-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary);font-size:12px}',
-  '.dshm-iconBtn{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:none;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;padding:0;font-size:13px}',
-  '.dshm-iconBtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}',
   '.dshm-tabs{display:flex;gap:2px;padding:6px 8px 0;border-bottom:1px solid var(--dsw-alias-border-l2);flex:none}',
   '.dshm-tab{border:none;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;padding:6px 10px;border-radius:8px 8px 0 0;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}',
   '.dshm-tab:hover{background:var(--dsw-alias-interactive-bg-hover)}',
@@ -282,7 +271,7 @@ if (typeof document !== 'undefined' && document.querySelector('style[data-plugin
   document.head.appendChild(tag)
 }
 
-/** Brain icon for the footer trigger. */
+/** Brain icon for the tab. */
 const BrainIcon = (props: { size?: number }) => (
   <svg width={props.size ?? 16} height={props.size ?? 16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
     <path d="M9.5 3a3 3 0 0 0-3 3 3 3 0 0 0-2.4 4.8A3 3 0 0 0 5 16.5 3 3 0 0 0 9.5 21c1 0 2-.6 2.5-1.5V4.5C11.5 3.7 10.6 3 9.5 3z" />
@@ -295,7 +284,7 @@ const BrainIcon = (props: { size?: number }) => (
 // ---------------------------------------------------------------------------
 
 /** Daemon card: status badge, key facts, start/stop actions. */
-function DaemonCard(props: { t: Translate; status: StatusPayload | null; busy: 'start' | 'stop' | null; onStart(): void; onStop(): void; onRefresh(): void }) {
+function DaemonCard(props: { t: (key: Key) => string; status: StatusPayload | null; busy: 'start' | 'stop' | null; onStart(): void; onStop(): void; onRefresh(): void }) {
   const { t, status, busy } = props
   const running = status?.health.running ?? false
   const state = busy !== null ? busy : running ? 'running' : 'stopped'
@@ -328,7 +317,7 @@ function DaemonCard(props: { t: Translate; status: StatusPayload | null; busy: '
 }
 
 /** Paths + starter info card. */
-function RuntimeCard(props: { t: Translate; status: StatusPayload | null }) {
+function RuntimeCard(props: { t: (key: Key) => string; status: StatusPayload | null }) {
   const { t, status } = props
   if (!status) return null
   return (
@@ -348,14 +337,14 @@ function RuntimeCard(props: { t: Translate; status: StatusPayload | null }) {
 const CONFIG_GROUP_ORDER = ['server', 'daemon', 'bank', 'memory', 'survey', 'logging'] as const
 
 /** Config tab body: grouped effective values + file/env/harness summaries. */
-function ConfigView(props: { t: Translate; cfg: ConfigPayload | null; err: string | null }) {
+function ConfigView(props: { t: (key: Key) => string; cfg: ConfigPayload | null; err: string | null }) {
   const { t, cfg } = props
   if (props.err !== null) return <div className="dshm-err">{props.err}</div>
   if (cfg === null) return <div className="dshm-muted">{t('common.loading')}</div>
   const groups = CONFIG_GROUP_ORDER
     .map((g) => ({ g, items: cfg.items.filter((i) => i.group === g) }))
     .filter((x) => x.items.length > 0)
-  const zhUi = document.documentElement.lang === 'zh' || navigator.language.toLowerCase().startsWith('zh')
+  const zhUi = isZh()
   return (
     <div>
       <div className="dshm-card">
@@ -406,7 +395,7 @@ function ConfigView(props: { t: Translate; cfg: ConfigPayload | null; err: strin
 }
 
 /** Banks tab body: table sorted by last write, expandable page list. */
-function BanksView(props: { t: Translate; banks: BankRow[] | null; err: string | null }) {
+function BanksView(props: { t: (key: Key) => string; banks: BankRow[] | null; err: string | null }) {
   const { t } = props
   const [expanded, setExpanded] = useState<Record<string, PageNode[] | 'loading' | 'error' | null | undefined>>({})
   if (props.err !== null) return <div className="dshm-err">{t('banks.error')}: {props.err}</div>
@@ -463,7 +452,7 @@ function BanksView(props: { t: Translate; banks: BankRow[] | null; err: string |
 }
 
 /** Logs tab body: two tail blocks. */
-function LogsView(props: { t: Translate; logs: LogsPayload | null; err: string | null; onRefresh(): void }) {
+function LogsView(props: { t: (key: Key) => string; logs: LogsPayload | null; err: string | null; onRefresh(): void }) {
   const { t } = props
   const block = (title: string, tail: LogTail | undefined): JSX.Element => (
     <div className="dshm-card" key={title}>
@@ -492,62 +481,66 @@ function LogsView(props: { t: Translate; logs: LogsPayload | null; err: string |
 }
 
 // ---------------------------------------------------------------------------
-// Store: panel visibility + active tab (shared by footer button and panel)
+// Store: active sub-page (persists across remounts; the tab's open/close
+// state itself is owned by better-sidebar, not by this store)
 // ---------------------------------------------------------------------------
 
 type Tab = 'status' | 'config' | 'banks' | 'logs'
 
 interface PanelState {
-  open: boolean
   tab: Tab
 }
 
 const store = defineStore({
-  persist: NS,
-  init: (): PanelState => ({ open: false, tab: 'status' }),
+  persist: 'dsh-hindsight-manager',
+  init: (): PanelState => ({ tab: 'status' }),
   actions: {
-    toggle(d) { d.open = !d.open },
-    close(d) { d.open = false },
     setTab(d, tab: Tab) { d.tab = tab },
   },
 })
 
 // ---------------------------------------------------------------------------
-// Components
+// Badge status cache: fed by a lifecycle-scoped background poller so the
+// synchronous badge() never goes stale while the tab is open but hidden.
+// Reference-counted: multi-session instances share one timer.
 // ---------------------------------------------------------------------------
 
-/** Store share the slot system hands to both registered components. */
-interface StoreShare {
-  useStore: <T>(sel: (s: PanelState) => T) => T
-  actions: { toggle(): void; close(): void; setTab(tab: Tab): void }
+const BADGE_POLL_MS = 10_000
+
+const statusCache = { running: null as boolean | null }
+let badgeRefs = 0
+let badgeTimer: ReturnType<typeof setInterval> | null = null
+
+async function pollStatusCache(): Promise<void> {
+  try {
+    const payload = await api<StatusPayload>('/status')
+    statusCache.running = payload.health.running
+  } catch { /* unreachable: keep last known state */ }
 }
 
-/** Sidebar footer action: toggles the manager panel (rail-aware). */
-function FooterButton(props: { wide: boolean } & StoreShare & { t: Translate }) {
-  const open = props.useStore((s) => s.open)
-  return (
-    <button
-      type="button"
-      className="dshm-footBtn"
-      data-rail={props.wide ? undefined : 'true'}
-      data-active={open || undefined}
-      aria-label={props.t('footer.label')}
-      title={props.t('footer.label')}
-      onClick={() => { props.actions.toggle() }}
-    >
-      <BrainIcon size={props.wide ? 16 : 18} />
-      {props.wide && <span>{props.t('footer.label')}</span>}
-    </button>
-  )
+function badgeOpen(): void {
+  badgeRefs += 1
+  if (badgeRefs === 1) {
+    void pollStatusCache()
+    badgeTimer = setInterval(() => { void pollStatusCache() }, BADGE_POLL_MS)
+  }
 }
 
-interface PanelProps extends StoreShare {
-  t: Translate
+function badgeClose(): void {
+  badgeRefs = Math.max(0, badgeRefs - 1)
+  if (badgeRefs === 0 && badgeTimer !== null) {
+    clearInterval(badgeTimer)
+    badgeTimer = null
+  }
 }
 
-/** The right-docked manager panel: tabs + live status polling + actions. */
-function ManagerPanel(props: PanelProps) {
-  const s = props.useStore((x) => x)
+// ---------------------------------------------------------------------------
+// Tab component
+// ---------------------------------------------------------------------------
+
+/** The side-card tab body: sub-page tabs + visible-gated polling + actions. */
+function ManagerTab(props: TabComponentProps) {
+  const s = store.useStore((x) => x)
   const [status, setStatus] = useState<StatusPayload | null>(null)
   const [statusErr, setStatusErr] = useState<string | null>(null)
   const [busy, setBusy] = useState<'start' | 'stop' | null>(null)
@@ -564,6 +557,7 @@ function ManagerPanel(props: PanelProps) {
       const payload = await api<StatusPayload>('/status')
       setStatus(payload)
       setStatusErr(null)
+      statusCache.running = payload.health.running
       return payload
     } catch (e) {
       setStatusErr((e as Error).message)
@@ -581,16 +575,16 @@ function ManagerPanel(props: PanelProps) {
     }
   }, [])
 
-  // While open: poll status every 5s; refresh the active tab's data on switch.
+  // While visible: poll status every 5s; refresh the active sub-page on switch.
   useEffect(() => {
-    if (!s.open) return
+    if (!props.visible) return
     void refreshStatus()
     void refreshTab(s.tab)
     const timer = setInterval(() => {
       if (Date.now() > startDeadline.current) void refreshStatus()
     }, 5000)
     return () => { clearInterval(timer) }
-  }, [s.open, s.tab, refreshStatus, refreshTab])
+  }, [props.visible, s.tab, refreshStatus, refreshTab])
 
   // After a start action: poll every 2s until healthy or 120s cap.
   useEffect(() => {
@@ -617,8 +611,6 @@ function ManagerPanel(props: PanelProps) {
     if (s.tab === 'banks') void refreshTab('banks')
   }
 
-  if (!s.open) return null
-
   const tabs: { id: Tab; label: Key }[] = [
     { id: 'status', label: 'tab.status' },
     { id: 'config', label: 'tab.config' },
@@ -627,29 +619,24 @@ function ManagerPanel(props: PanelProps) {
   ]
 
   return (
-    <div className="dshm-win" style={{ width: 520 }}>
-      <div className="dshm-head">
-        <BrainIcon size={14} />
-        <span className="dshm-title">{props.t('panel.title')}</span>
-        <button type="button" className="dshm-iconBtn" title={props.t('common.close')} onClick={() => { props.actions.close() }}>✕</button>
-      </div>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div className="dshm-tabs">
         {tabs.map((tab) => (
           <button
             type="button" key={tab.id} className="dshm-tab" data-active={s.tab === tab.id || undefined}
-            onClick={() => { props.actions.setTab(tab.id) }}
-          >{props.t(tab.label)}</button>
+            onClick={() => { store.actions.setTab(tab.id) }}
+          >{tr(tab.label)}</button>
         ))}
       </div>
       <div className="dshm-body">
-        {statusErr !== null && <div className="dshm-err" style={{ marginBottom: 8 }}>{statusErr} <button type="button" className="dshm-btn" style={{ height: 20 }} onClick={() => { void refreshStatus() }}>{props.t('common.retry')}</button></div>}
+        {statusErr !== null && <div className="dshm-err" style={{ marginBottom: 8 }}>{statusErr} <button type="button" className="dshm-btn" style={{ height: 20 }} onClick={() => { void refreshStatus() }}>{tr('common.retry')}</button></div>}
         {s.tab === 'status' && <>
-          <DaemonCard t={props.t} status={status} busy={busy} onStart={() => { void onStart() }} onStop={() => { void onStop() }} onRefresh={() => { void refreshStatus() }} />
-          <RuntimeCard t={props.t} status={status} />
+          <DaemonCard t={tr} status={status} busy={busy} onStart={() => { void onStart() }} onStop={() => { void onStop() }} onRefresh={() => { void refreshStatus() }} />
+          <RuntimeCard t={tr} status={status} />
         </>}
-        {s.tab === 'config' && <ConfigView t={props.t} cfg={cfg} err={cfgErr} />}
-        {s.tab === 'banks' && <BanksView t={props.t} banks={banks} err={banksErr} />}
-        {s.tab === 'logs' && <LogsView t={props.t} logs={logs} err={logsErr} onRefresh={() => { void refreshTab('logs') }} />}
+        {s.tab === 'config' && <ConfigView t={tr} cfg={cfg} err={cfgErr} />}
+        {s.tab === 'banks' && <BanksView t={tr} banks={banks} err={banksErr} />}
+        {s.tab === 'logs' && <LogsView t={tr} logs={logs} err={logsErr} onRefresh={() => { void refreshTab('logs') }} />}
       </div>
     </div>
   )
@@ -659,20 +646,26 @@ function ManagerPanel(props: PanelProps) {
 // Plugin entry
 // ---------------------------------------------------------------------------
 
-/** Services required before apply runs. */
-export const inject = ['slots', 'locale']
+/** Services required before apply runs (absent betterSidebar -> no client UI). */
+export const inject = ['betterSidebar']
 
-/** Register the dictionaries, the footer trigger, and the docked panel.
+/** Register the side-card tab.
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-hindsight-manager: dictionaries')
-  ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register(
-    { name: 'sidebar.footer.action', id: 'hindsight-manager', order: 20, locale: NS, store },
-    FooterButton as never,
-  ))
-  ctx.slots.inject('shell.overlay', () => ctx.slots.register(
-    { name: 'shell.overlay', id: 'hindsight-manager-panel', registrant: NS, locale: NS, store },
-    ManagerPanel as never,
-  ))
+  const svc = ctx.betterSidebar
+  const gated = svc.features.includes('badge') && svc.features.includes('tabLifecycle')
+  ctx.effect(() => svc.registerTab({
+    id: 'hindsight-manager:main',
+    title: () => tr('panel.title'),
+    icon: (size: number) => <BrainIcon size={size} />,
+    order: 50,
+    single: true,
+    ...(gated ? {
+      badge: () => (statusCache.running === null ? undefined : statusCache.running ? '●' : '○'),
+      onOpen: () => { badgeOpen() },
+      onClose: () => { badgeClose() },
+    } : {}),
+    component: ManagerTab,
+  }), 'dsh-hindsight-manager: side card tab')
 }

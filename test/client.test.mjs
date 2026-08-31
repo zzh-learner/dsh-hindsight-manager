@@ -1,6 +1,7 @@
-// Client-bundle smoke: execute dist/client.js in a stubbed module-table
-// environment, then run apply() against a fake ctx and assert the
-// registrations target the right slots.
+// Client-bundle smoke for the better-sidebar side-card tab: execute
+// dist/client.js in a stubbed module-table environment, run apply() against
+// a fake ctx.betterSidebar, and assert the registered TabDescriptor shape,
+// feature gating, badge-poller lifecycle, and bundle purity.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -10,69 +11,115 @@ import { fileURLToPath } from 'node:url'
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const source = readFileSync(join(root, 'dist', 'client.js'), 'utf8')
 
-function loadBundle() {
-  let captured = null
-  const window = { __ModuleLoader__: { load: (entry) => { captured = entry } } }
-  const require = (spec) => {
+function makeRequire() {
+  return (spec) => {
     if (spec === 'react/jsx-runtime' || spec === 'react') {
-      return { jsx: (...args) => ({ args }), jsxs: (...args) => ({ args }), Fragment: 'Fragment' }
+      return { jsx: (...a) => ({ a }), jsxs: (...a) => ({ a }), Fragment: 'Fragment' }
     }
     if (spec === '@deepseek-ai/dsh-client-runtime/client') {
-      return { defineStore: (spec) => spec }
+      return { defineStore: (s) => s }
     }
     throw new Error('unexpected require: ' + spec)
   }
-  const run = new Function('window', 'require', source + '\n;window.__captured = window.__ModuleLoader__;')
-  run(window, require)
+}
+
+function loadBundle() {
+  let captured = null
+  const window = { __ModuleLoader__: { load: (entry) => { captured = entry } } }
+  const run = new Function('window', 'require', source)
+  run(window, makeRequire())
   assert.notEqual(captured, null)
   return { entry: captured }
 }
 
-test('bundle registers under the plugin id and exports a function plugin', () => {
+function exportsOf() {
   const { entry } = loadBundle()
-  assert.equal(entry.id, 'dsh-hindsight-manager')
-  assert.equal(typeof entry.factory, 'function')
-  const exports = entry.factory((spec) => {
-    if (spec === 'react/jsx-runtime' || spec === 'react') return { jsx: (...a) => ({ a }), jsxs: (...a) => ({ a }), Fragment: 'F' }
-    if (spec === '@deepseek-ai/dsh-client-runtime/client') return { defineStore: (s) => s }
-    throw new Error('unexpected require: ' + spec)
-  })
-  assert.deepEqual(exports.inject, ['slots', 'locale'])
-  assert.equal(typeof exports.apply, 'function')
+  return entry.factory(makeRequire())
+}
+
+function makeCtx(features) {
+  const registered = []
+  return {
+    ctx: {
+      effect: (fn) => { fn(); return () => {} },
+      betterSidebar: { features, registerTab: (d) => { registered.push(d); return () => {} } },
+    },
+    registered,
+  }
+}
+
+test('bundle never references dsh-better-sidebar at runtime (purity)', () => {
+  assert.ok(!source.includes('dsh-better-sidebar'), 'type-only import leaked into the bundle')
 })
 
-test('apply registers dictionaries plus footer action and overlay panel', () => {
-  const { entry } = loadBundle()
-  const exports = entry.factory((spec) => {
-    if (spec === 'react/jsx-runtime' || spec === 'react') return { jsx: (...a) => ({ a }), jsxs: (...a) => ({ a }), Fragment: 'F' }
-    if (spec === '@deepseek-ai/dsh-client-runtime/client') return { defineStore: (s) => s }
-    throw new Error('unexpected require: ' + spec)
-  })
+test('bundle registers under the plugin id and injects only betterSidebar', () => {
+  const ex = exportsOf()
+  assert.deepEqual(ex.inject, ['betterSidebar'])
+  assert.equal(typeof ex.apply, 'function')
+})
 
-  const injected = []
-  const registrations = []
-  const localeCalls = []
-  const ctx = {
-    effect: (fn) => { fn(); return () => {} },
-    locale: { register: (ns, dicts) => { localeCalls.push([ns, dicts]); return () => {} } },
-    slots: {
-      inject: (key, callback) => { injected.push(key); callback(); return () => {} },
-      register: (options, component) => { registrations.push([options, component]); return () => {} },
-    },
+test('apply registers a single-instance tab descriptor with gated badge/lifecycle', () => {
+  const ex = exportsOf()
+  const { ctx, registered } = makeCtx(['badge', 'tabLifecycle'])
+  ex.apply(ctx)
+  assert.equal(registered.length, 1)
+  const d = registered[0]
+  assert.equal(d.id, 'hindsight-manager:main')
+  assert.equal(d.single, true)
+  assert.equal(d.order, 50)
+  assert.equal(typeof d.title(), 'string')
+  assert.equal(typeof d.icon, 'function')
+  assert.equal(typeof d.component, 'function')
+  assert.equal(typeof d.badge, 'function')
+  assert.equal(typeof d.onOpen, 'function')
+  assert.equal(typeof d.onClose, 'function')
+  assert.equal(d.badge(), undefined) // cache unknown before any poll
+})
+
+test('descriptor omits badge/lifecycle when features are absent', () => {
+  const ex = exportsOf()
+  const { ctx, registered } = makeCtx([])
+  ex.apply(ctx)
+  assert.equal(registered.length, 1)
+  assert.equal('badge' in registered[0], false)
+  assert.equal('onOpen' in registered[0], false)
+  assert.equal('onClose' in registered[0], false)
+})
+
+test('badge poller: one shared timer across opens, cleared when all close', async () => {
+  const ex = exportsOf()
+  const realFetch = globalThis.fetch
+  const realSet = globalThis.setInterval
+  const realClear = globalThis.clearInterval
+  const fetchCalls = []
+  const started = []
+  const cleared = []
+  let handle = null
+  globalThis.fetch = async (url) => {
+    fetchCalls.push(String(url))
+    return { ok: true, json: async () => ({ health: { running: true } }) }
   }
-  exports.apply(ctx)
-
-  assert.deepEqual(injected.sort(), ['shell.overlay', 'sidebar.footer.action'])
-  assert.equal(localeCalls.length, 1)
-  assert.equal(localeCalls[0][0], 'dsh-hindsight-manager')
-  assert.ok(localeCalls[0][1].zh && localeCalls[0][1].en)
-
-  const footer = registrations.find(([o]) => o.id === 'hindsight-manager')
-  const panel = registrations.find(([o]) => o.id === 'hindsight-manager-panel')
-  assert.ok(footer, 'footer registration present')
-  assert.ok(panel, 'panel registration present')
-  assert.equal(footer[0].name, 'sidebar.footer.action')
-  assert.equal(panel[0].name, 'shell.overlay')
-  assert.equal(typeof footer[1], 'function')
-  assert.equal(typeof panel[1], 'function')
+  globalThis.setInterval = (fn, ms) => { started.push(ms); handle = realSet(fn, ms); return handle }
+  globalThis.clearInterval = (id) => { cleared.push(id); realClear(id) }
+  try {
+    const { ctx, registered } = makeCtx(['badge', 'tabLifecycle'])
+    ex.apply(ctx)
+    const d = registered[0]
+    d.onOpen({}, { sessionId: 'a' })
+    d.onOpen({}, { sessionId: 'b' })
+    await new Promise((resolve) => setImmediate(resolve))
+    assert.equal(fetchCalls.length, 1) // one immediate poll; 10s intervals never fire here
+    assert.ok(fetchCalls[0].endsWith('/status'))
+    assert.deepEqual(started, [10000]) // exactly one interval despite two opens
+    assert.equal(d.badge(), '●')
+    d.onClose({}, { sessionId: 'a' })
+    assert.deepEqual(cleared, []) // one instance still open
+    d.onClose({}, { sessionId: 'b' })
+    assert.deepEqual(cleared, [handle]) // interval cleared when refcount hits zero
+  } finally {
+    if (handle !== null) realClear(handle)
+    globalThis.fetch = realFetch
+    globalThis.setInterval = realSet
+    globalThis.clearInterval = realClear
+  }
 })
