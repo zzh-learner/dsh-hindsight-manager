@@ -8,7 +8,7 @@
  * daemon health from a module-level cache fed by a lifecycle-scoped
  * background poller.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { defineStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 // Type-only: dsh-better-sidebar service faces (ctx.betterSidebar). Never
@@ -499,6 +499,11 @@ const store = defineStore({
   },
 })
 
+/** Module-level instance (root scope: persist key stays 'dsh-hindsight-manager').
+ * The slot engine used to instantiate store handles for slot-registered
+ * components; a better-sidebar tab component must create its own instance. */
+const panelStore = store.create()
+
 // ---------------------------------------------------------------------------
 // Badge status cache: fed by a lifecycle-scoped background poller so the
 // synchronous badge() never goes stale while the tab is open but hidden.
@@ -528,10 +533,12 @@ function badgeOpen(): void {
 
 function badgeClose(): void {
   badgeRefs = Math.max(0, badgeRefs - 1)
-  if (badgeRefs === 0 && badgeTimer !== null) {
-    clearInterval(badgeTimer)
-    badgeTimer = null
-  }
+  if (badgeRefs === 0) badgeStop()
+}
+
+function badgeStop(): void {
+  badgeRefs = 0
+  if (badgeTimer !== null) { clearInterval(badgeTimer); badgeTimer = null }
 }
 
 // ---------------------------------------------------------------------------
@@ -540,7 +547,7 @@ function badgeClose(): void {
 
 /** The side-card tab body: sub-page tabs + visible-gated polling + actions. */
 function ManagerTab(props: TabComponentProps) {
-  const s = store.useStore((x) => x)
+  const s = useSyncExternalStore(panelStore.subscribe, panelStore.getSnapshot)
   const [status, setStatus] = useState<StatusPayload | null>(null)
   const [statusErr, setStatusErr] = useState<string | null>(null)
   const [busy, setBusy] = useState<'start' | 'stop' | null>(null)
@@ -624,7 +631,7 @@ function ManagerTab(props: TabComponentProps) {
         {tabs.map((tab) => (
           <button
             type="button" key={tab.id} className="dshm-tab" data-active={s.tab === tab.id || undefined}
-            onClick={() => { store.actions.setTab(tab.id) }}
+            onClick={() => { panelStore.actions.setTab(tab.id) }}
           >{tr(tab.label)}</button>
         ))}
       </div>
@@ -655,17 +662,25 @@ export const inject = ['betterSidebar']
 export function apply(ctx: ClientContext): void {
   const svc = ctx.betterSidebar
   const gated = svc.features.includes('badge') && svc.features.includes('tabLifecycle')
-  ctx.effect(() => svc.registerTab({
-    id: 'hindsight-manager:main',
-    title: () => tr('panel.title'),
-    icon: (size: number) => <BrainIcon size={size} />,
-    order: 50,
-    single: true,
-    ...(gated ? {
-      badge: () => (statusCache.running === null ? undefined : statusCache.running ? '●' : '○'),
-      onOpen: () => { badgeOpen() },
-      onClose: () => { badgeClose() },
-    } : {}),
-    component: ManagerTab,
-  }), 'dsh-hindsight-manager: side card tab')
+  ctx.effect(() => {
+    const dispose = svc.registerTab({
+      id: 'hindsight-manager:main',
+      title: () => tr('panel.title'),
+      icon: (size: number) => <BrainIcon size={size} />,
+      order: 50,
+      single: true,
+      ...(gated ? {
+        badge: () => (statusCache.running === null ? undefined : statusCache.running ? '●' : '○'),
+        onOpen: () => { badgeOpen() },
+        onClose: () => { badgeClose() },
+      } : {}),
+      component: ManagerTab,
+    })
+    return () => {
+      dispose()
+      // The registry disposer does NOT fire onClose for open tabs — stop the
+      // shared badge poller unconditionally so HMR/unload cannot leak it.
+      badgeStop()
+    }
+  }, 'dsh-hindsight-manager: side card tab')
 }

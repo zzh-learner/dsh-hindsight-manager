@@ -9,10 +9,17 @@ declare module '@deepseek-ai/dsh-client-runtime/client' {
     effect(fn: () => () => void, label?: string): () => void
     betterSidebar: import('dsh-better-sidebar').BetterSidebarService
   }
-  export interface StoreHandle<T, A> {
-    useStore<S>(selector: (state: T) => S): S
-    /** The runtime binds each mutator's draft (client.js: actions[key] = (...params) => store.update(d => mutate(d, ...params))); exposed actions drop it. */
+  /** A store instance returned by StoreHandle.create(). */
+  export interface StoreInstance<T, A> {
+    /** Draft-stripped bound mutators (the runtime binds each draft). */
     actions: { [K in keyof A]: A[K] extends (draft: T, ...args: infer P) => void ? (...args: P) => void : never }
+    getSnapshot(): T
+    subscribe(listener: () => void): () => void
+  }
+  /** defineStore's return: the registration handle; create() instantiates. */
+  export interface StoreHandle<T, A> {
+    spec: StoreSpec<T> & { actions: A & ActionsDecl<T> }
+    create(scopeKey?: string): StoreInstance<T, A>
   }
   export interface ActionsDecl<T> {
     [key: string]: (draft: T, ...args: never[]) => void

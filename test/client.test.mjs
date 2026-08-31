@@ -14,10 +14,24 @@ const source = readFileSync(join(root, 'dist', 'client.js'), 'utf8')
 function makeRequire() {
   return (spec) => {
     if (spec === 'react/jsx-runtime' || spec === 'react') {
-      return { jsx: (...a) => ({ a }), jsxs: (...a) => ({ a }), Fragment: 'Fragment' }
+      return {
+        jsx: (...a) => ({ a }), jsxs: (...a) => ({ a }), Fragment: 'Fragment',
+        useState: (v) => [typeof v === 'function' ? v() : v, () => {}],
+        useEffect: () => {}, useRef: (v) => ({ current: v }), useCallback: (fn) => fn,
+        useSyncExternalStore: (_s, g) => g(),
+      }
     }
     if (spec === '@deepseek-ai/dsh-client-runtime/client') {
-      return { defineStore: (s) => s }
+      return {
+        defineStore: (decl) => ({
+          spec: decl,
+          create: () => ({
+            actions: Object.fromEntries(Object.entries(decl.actions || {}).map(([k, m]) => [k, (...p) => m({}, ...p)])),
+            getSnapshot: () => decl.init(),
+            subscribe: () => () => {},
+          }),
+        }),
+      }
     }
     throw new Error('unexpected require: ' + spec)
   }
@@ -122,4 +136,13 @@ test('badge poller: one shared timer across opens, cleared when all close', asyn
     globalThis.setInterval = realSet
     globalThis.clearInterval = realClear
   }
+})
+
+test('ManagerTab renders through the real component path (store handle/instance regression gate)', () => {
+  const ex = exportsOf()
+  const { ctx, registered } = makeCtx(['badge', 'tabLifecycle'])
+  ex.apply(ctx)
+  const d = registered[0]
+  const element = d.component({ ctx: {}, scope: { sessionId: 't' }, tab: { id: 'x', type: 'hindsight-manager:main' }, visible: true })
+  assert.ok(element !== null && typeof element === 'object')
 })
