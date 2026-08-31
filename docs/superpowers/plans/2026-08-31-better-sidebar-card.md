@@ -1117,9 +1117,9 @@ new_string:
 edit 5（结构表 client 行）：
 
 old_string:
-| src/client.tsx | client half：侧栏 footer 按钮（sidebar.footer.action 槽）+ 右侧停靠面板（shell.overlay 槽） |
+| src/client.tsx | client 半：侧栏 footer 按钮（sidebar.footer.action 槽）+ 右侧停靠面板（shell.overlay 槽） |
 new_string:
-| src/client.tsx | client half：注册 better-sidebar tab（ctx.betterSidebar.registerTab）+ tab 组件（4 子页）与 badge 状态缓存 |
+| src/client.tsx | client 半：注册 better-sidebar tab（ctx.betterSidebar.registerTab）+ tab 组件（4 子页）与 badge 状态缓存 |
 
 edit 6（结构表 types 行）：
 
