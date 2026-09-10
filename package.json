@@ -3,7 +3,6 @@
   "version": "0.2.0",
   "description": "DSH Web UI panel for the Hindsight coding-agent memory plugin: view config/status of every Hindsight layer and start/stop the local daemon.",
   "license": "MIT",
-  "packageManager": "pnpm@11.21.0",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
