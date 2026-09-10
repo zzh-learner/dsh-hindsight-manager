@@ -1,6 +1,4 @@
 node_modules/
-lib/
-dist/
 out.log
 err.log
 *.log

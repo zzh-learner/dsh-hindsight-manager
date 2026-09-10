@@ -23,7 +23,6 @@
   ],
   "scripts": {
     "build": "node scripts/build.mjs",
-    "prepare": "node scripts/build.mjs",
     "test": "node --test test/hindsight.test.mjs test/client.test.mjs test/api.test.mjs test/daemon.test.mjs",
     "typecheck": "tsc -p tsconfig.json"
   },
