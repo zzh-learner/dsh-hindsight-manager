@@ -22,16 +22,9 @@ function makeRequire() {
       }
     }
     if (spec === '@deepseek-ai/dsh-client-runtime/client') {
-      return {
-        defineStore: (decl) => ({
-          spec: decl,
-          create: () => ({
-            actions: Object.fromEntries(Object.entries(decl.actions || {}).map(([k, m]) => [k, (...p) => m({}, ...p)])),
-            getSnapshot: () => decl.init(),
-            subscribe: () => () => {},
-          }),
-        }),
-      }
+      // Removed from the host module table in dsh 0.1.2 — the bundle must not
+      // reference it anymore; reaching this branch means a regression.
+      throw new Error('bundle requires deleted host package dsh-client-runtime')
     }
     throw new Error('unexpected require: ' + spec)
   }
@@ -64,6 +57,10 @@ function makeCtx(features) {
 
 test('bundle never references dsh-better-sidebar at runtime (purity)', () => {
   assert.ok(!source.includes('dsh-better-sidebar'), 'type-only import leaked into the bundle')
+})
+
+test('bundle requires no @deepseek-ai/* host package (host client APIs shift between dsh releases)', () => {
+  assert.ok(!source.includes('require("@deepseek-ai/'), 'host client package import leaked into the bundle; vendor it instead')
 })
 
 test('bundle registers under the plugin id and injects only betterSidebar', () => {

@@ -9,8 +9,8 @@
  * background poller.
  */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { defineStore } from '@deepseek-ai/dsh-client-runtime/client'
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import { defineStore } from './client-store.ts'
+import type { ClientContext } from './client-store.ts'
 // Type-only: dsh-better-sidebar service faces (ctx.betterSidebar). Never
 // value-import this package — the client build purity gate rejects it.
 import type { TabComponentProps } from 'dsh-better-sidebar'

@@ -1,38 +1,10 @@
 /**
- * Client-side ambient declarations, mirrored from dsh-client-runtime /
- * dsh-better-sidebar shipped .d.ts files. Only the members this plugin
- * uses are declared; the real runtime owns the shapes.
+ * Client-side ambient declarations, mirrored from the dsh-better-sidebar
+ * shipped .d.ts. Only the members this plugin uses are declared; the real
+ * runtime owns the shapes. The former '@deepseek-ai/dsh-client-runtime/client'
+ * ambient block became a real module (src/client-store.ts): dsh 0.1.2 removed
+ * that package from the client module table.
  */
-declare module '@deepseek-ai/dsh-client-runtime/client' {
-  /** Client root context face used by client plugin apply(). */
-  export interface ClientContext {
-    effect(fn: () => () => void, label?: string): () => void
-    betterSidebar: import('dsh-better-sidebar').BetterSidebarService
-  }
-  /** A store instance returned by StoreHandle.create(). */
-  export interface StoreInstance<T, A> {
-    /** Draft-stripped bound mutators (the runtime binds each draft). */
-    actions: { [K in keyof A]: A[K] extends (draft: T, ...args: infer P) => void ? (...args: P) => void : never }
-    getSnapshot(): T
-    subscribe(listener: () => void): () => void
-  }
-  /** defineStore's return: the registration handle; create() instantiates. */
-  export interface StoreHandle<T, A> {
-    spec: StoreSpec<T> & { actions: A & ActionsDecl<T> }
-    create(scopeKey?: string): StoreInstance<T, A>
-  }
-  export interface ActionsDecl<T> {
-    [key: string]: (draft: T, ...args: never[]) => void
-  }
-  export interface StoreSpec<T> {
-    init: () => T
-    persist?: string
-  }
-  export function defineStore<T, A extends ActionsDecl<T>>(
-    decl: StoreSpec<T> & { actions: A & ActionsDecl<T> },
-  ): StoreHandle<T, A>
-}
-
 declare module 'dsh-better-sidebar' {
   import type { ReactNode } from 'react'
   /** Session the tab targets (minimal face of the shipped type). */
